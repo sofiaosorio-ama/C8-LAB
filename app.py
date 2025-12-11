@@ -3,194 +3,221 @@ import openai
 import time
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="C8 Synth-Lab 2.0", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="C8 Synth-Lab 3.0", page_icon="🧬", layout="wide")
 
 # --- ESTILOS VISUALES (C8 BRANDING) ---
 st.markdown("""
 <style>
-    .stChatMessage { border-radius: 10px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .stChatMessage { border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .user-message { background-color: #f0f2f6; }
-    h1 { color: #1E293B; font-family: 'Helvetica', sans-serif; }
-    .stButton button { width: 100%; border-radius: 8px; font-weight: bold; }
-    .reportview-container .main .block-container { max-width: 1000px; }
+    h1 { color: #1E293B; font-family: 'Helvetica', sans-serif; font-weight: 700; }
+    .report-box { background-color: #e3f2fd; padding: 20px; border-radius: 10px; border-left: 5px solid #2196f3; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. MEMORIA DEL SISTEMA ---
+# --- GESTIÓN DE LA API KEY (SECRETA) ---
+# Intenta leer la llave de los Secretos de Streamlit. Si no está, la pide manual.
+try:
+    if "OPENAI_API_KEY" in st.secrets:
+        openai.api_key = st.secrets["OPENAI_API_KEY"]
+        api_key_configured = True
+    else:
+        api_key_configured = False
+except:
+    api_key_configured = False
+
+# --- MEMORIA DEL SISTEMA ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "simulation_active" not in st.session_state:
     st.session_state.simulation_active = False
 
-# ARQUETIPOS EN MEMORIA
+# --- DEFINICIÓN DE PERSONALIDADES (ACTUACIÓN) ---
 if "c8_archetypes" not in st.session_state:
     st.session_state.c8_archetypes = {
-        "El Visionario": "Eres un estratega soñador. Tu foco: Expansión, Propósito y Futuro. No te preocupan los detalles técnicos, sino la GRAN visión. Usas metáforas inspiradoras.",
-        "El Provocador": "Eres disruptivo, directo y un poco cínico. Odias los clichés de marketing. Tu trabajo es encontrar el punto débil, lo aburrido o lo falso de la idea. Retas al usuario.",
-        "El Educador": "Eres metódico y estructurado. Te obsesiona la claridad, el paso a paso y la pedagogía. Preguntas: ¿Es accionable? ¿Se entiende? ¿Cuál es la metodología?",
-        "El Curador": "Eres un esteta perfeccionista. Buscas la excelencia visual, la experiencia de usuario premium y la diferenciación por calidad. Odias lo 'barato' o genérico.",
-        "El Estratega de Negocio": "Eres frío y calculador. Solo te importa el ROI, el Margen, la Escalabilidad y el Modelo de Negocio. Si no da dinero, no sirve."
+        "El Visionario": """ERES EL VISIONARIO.
+        Tono: Inspirador, futurista, elevado.
+        Acciones: *Mira al horizonte*, *extiende los brazos*, *susurra con emoción*.
+        Enfoque: Propósito, legado y "The Big Picture". Ignora los detalles técnicos.
+        Frase típica: "¿Estamos construyendo un negocio o un legado?".""",
+        
+        "El Provocador": """ERES EL PROVOCADOR.
+        Tono: Cínico, agresivo, directo, sin filtros. Odiador de gurús.
+        Acciones: *Golpea la mesa*, *se cruza de brazos*, *resopla*, *levanta una ceja con duda*.
+        Enfoque: Destruir el humo. Buscar la autenticidad radical.
+        Ejemplo: "¿'100% rentable'? ¿En serio? Eso suena a estafa de 2019. Dame realidad.".""",
+        
+        "El Educador": """ERES EL EDUCADOR.
+        Tono: Calmado, analítico, pedagógico, protector del alumno.
+        Acciones: *Se ajusta las gafas*, *toma notas en su libreta*, *levanta un dedo para puntualizar*.
+        Enfoque: Metodología, claridad y aplicabilidad. ¿Es replicable o es caos?
+        Ejemplo: "Espera, bajemos la guardia. Si esto me da el CÓMO exacto, es oro.".""",
+        
+        "El Curador": """ERES EL CURADOR.
+        Tono: Sofisticado, exigente, elitista (en el buen sentido).
+        Acciones: *Mira con ojo crítico*, *hace una mueca de disgusto*, *asiente lentamente*.
+        Enfoque: Estética, experiencia de usuario (UX), selección premium. Odia la saturación.
+        Ejemplo: "Yo busco la Exquisitez Estratégica. ¿Esto me eleva o me hace uno más?".""",
+        
+        "El Cliente Escéptico": """ERES EL CLIENTE ESCÉPTICO.
+        Tono: Desconfiado, impaciente, con miedo a perder dinero.
+        Acciones: *Revisa su cartera*, *mira el reloj*, *frunce el ceño*.
+        Enfoque: ROI (Retorno), garantías y resultados rápidos."""
     }
 
 # --- BARRA LATERAL ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/1048/1048927.png", width=50)
-    st.title("🎛️ Centro de Mando C8")
+    st.title("🎛️ Centro C8")
     
-    # API Key
-    api_key = st.text_input("Tu OpenAI API Key", type="password")
-    if api_key:
-        openai.api_key = api_key
+    # Check de Llave
+    if api_key_configured:
+        st.success("🔑 Llave C8 Activada Automáticamente")
+    else:
+        manual_key = st.text_input("Pega tu API Key (O configúrala en Secrets):", type="password")
+        if manual_key:
+            openai.api_key = manual_key
+            api_key_configured = True
     
     st.divider()
-
-    # --- CONFIGURACIÓN DE LA SALA ---
-    st.subheader("📍 Configuración del Escenario")
     
-    scenario = st.selectbox(
-        "¿Cuál es la situación actual?",
-        ["Validación de Idea Nueva", "Preparación de Lanzamiento", "Rebranding / Cambio de Imagen", "Crisis de Reputación", "Escalado de Negocio", "Creación de Contenido"]
-    )
+    # Configuración
+    rounds = st.slider("🔄 Intensidad del Debate (Rondas)", 1, 4, 2)
     
-    rounds = st.slider("🔄 Rondas de Debate (Profundidad)", min_value=1, max_value=5, value=2, help="Cuántas veces hablará cada agente.")
-
-    st.divider()
-
-    # --- EQUIPO ---
-    st.subheader("👥 El Consejo C8")
+    st.subheader("👥 El Consejo")
     options_list = list(st.session_state.c8_archetypes.keys())
     selected_archetypes = st.multiselect(
-        "Selecciona a los expertos:",
+        "Expertos en sala:",
         options=options_list,
-        default=["El Visionario", "El Provocador", "El Estratega de Negocio"]
+        default=["El Provocador", "El Educador", "El Curador"]
     )
 
-    # CREAR NUEVO
-    with st.expander("✨ + Añadir Nuevo Experto"):
-        new_name = st.text_input("Nombre del Rol")
-        new_desc = st.text_area("Personalidad / Enfoque")
-        if st.button("Guardar Experto"):
-            if new_name and new_desc:
-                st.session_state.c8_archetypes[new_name] = new_desc
-                st.success(f"¡{new_name} añadido!")
-                time.sleep(1)
-                st.rerun()
+    # Botón de Historial (Simulado para MVP)
+    with st.expander("📂 Historial de Sesiones (Beta)"):
+        st.info("Para guardar chats permanentemente, necesitaremos conectar una base de datos en la Fase 3. Por ahora, usa el botón de 'Descargar Reporte' al final.")
 
-    if st.button("🗑️ Reiniciar Sesión"):
+    if st.button("🗑️ Nueva Sesión (Borrar)"):
         st.session_state.messages = []
         st.session_state.simulation_active = False
         st.rerun()
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("🧬 C8 Deep Intelligence Lab")
-st.markdown(f"**Escenario Activo:** `{scenario}` | **Modo:** `Debate Multidireccional`")
 
-# 1. INPUT DEL USUARIO
+# 1. INPUT
 if len(st.session_state.messages) == 0:
-    with st.container():
-        st.info(f"👋 Hola Sofía. Tus expertos están listos para simular un escenario de **{scenario}**.")
-        initial_idea = st.chat_input("Escribe la idea, copy o estrategia a debatir...")
-        if initial_idea:
-            st.session_state.messages.append({"role": "user", "content": initial_idea, "name": "Sofia (CEO)"})
-            st.session_state.simulation_active = True
-            st.rerun()
+    st.info("👋 Los expertos están esperando. ¿Qué idea vamos a someter a juicio hoy?")
+    initial_idea = st.chat_input("Escribe tu idea, promesa o copy aquí...")
+    if initial_idea:
+        st.session_state.messages.append({"role": "user", "content": initial_idea, "name": "Sofia (CEO)"})
+        st.session_state.simulation_active = True
+        st.rerun()
 
-# 2. MOSTRAR HISTORIAL
+# 2. CHAT VISUAL
 for msg in st.session_state.messages:
     avatar = "👩‍💻" if msg["role"] == "user" else "⚡"
     with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(f"**{msg.get('name', 'AI')}:**")
-        st.write(msg["content"])
+        # Detectar quién habla para poner negrita
+        name = msg.get('name', 'AI')
+        st.markdown(f"**{name}:**")
+        st.markdown(msg["content"])
 
-# 3. MOTOR DE DEBATE (LOOP COMPLEJO)
+# 3. MOTOR DE ACTUACIÓN (LOOP)
 if st.session_state.simulation_active:
-    if not api_key:
-        st.warning("⚠️ Necesitas la API Key para activar el cerebro.")
+    if not api_key_configured:
+        st.error("⚠️ Falta la API Key.")
         st.stop()
 
-    # BUCLE DE RONDAS (Aquí está la potencia)
-    total_turns = rounds * len(selected_archetypes)
-    
     st.divider()
-    status_text = st.empty()
-    progress_bar = st.progress(0)
     
-    current_turn = 0
-    
-    # Iteramos por el número de rondas solicitadas
+    # Bucle de Rondas
     for r in range(rounds):
-        st.markdown(f"### 🔄 Ronda {r + 1} de {rounds}")
+        st.caption(f"🔥 DEBATE: RONDA {r + 1} DE {rounds}")
         
         for agent_name in selected_archetypes:
-            # Actualizar barra de progreso
-            current_turn += 1
-            progress = current_turn / total_turns
-            progress_bar.progress(progress)
-            status_text.caption(f"Pensando: {agent_name} (Analizando contexto...)")
-            
-            with st.chat_message("assistant", avatar="🧠"):
+            with st.chat_message("assistant", avatar="🎭"):
                 message_placeholder = st.empty()
                 
-                # RECUPERAR PERSONALIDAD
-                agent_persona = st.session_state.c8_archetypes[agent_name]
-                
-                # PROMPT DE INGENIERÍA AVANZADA
-                # Le damos instrucciones de debatir con los anteriores
+                # INGENIERÍA DE PROMPT (ACTUACIÓN)
+                persona = st.session_state.c8_archetypes[agent_name]
                 system_prompt = f"""
-                Eres {agent_name}. 
-                Tu personalidad es: {agent_persona}.
+                {persona}
                 
-                CONTEXTO:
-                - Escenario: {scenario}
-                - Ronda actual: {r + 1} de {rounds}.
+                INSTRUCCIONES DE ACTUACIÓN:
+                1. Estás en un debate real. RESPONDE a lo que dijeron los otros agentes antes que tú.
+                2. USA ACOTACIONES de teatro entre asteriscos al inicio o mitad de la frase. Ejemplo: *golpea la mesa* o *se ríe irónicamente*.
+                3. Mantén tu personalidad al 100%. Si eres el Provocador, sé duro. Si eres el Educador, sé útil.
+                4. Sé conciso pero impactante.
                 
-                OBJETIVO:
-                Analiza la idea del usuario y las respuestas de los otros agentes.
-                No seas genérico. Profundiza.
-                Si estás en la Ronda 1: Da tu primera impresión fuerte.
-                Si estás en Rondas siguientes: REFUTA o APOYA lo que dijeron los otros agentes antes que tú. Genera debate.
-                Usa formato Markdown (negritas, listas) para estructurar tu respuesta.
+                HISTORIAL DEL DEBATE:
                 """
                 
                 messages = [{"role": "system", "content": system_prompt}]
-                
-                # Inyectamos toda la memoria de la conversación
                 for m in st.session_state.messages:
                     role = "user" if m["role"] == "user" else "assistant"
                     messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
 
                 try:
-                    client = openai.OpenAI(api_key=api_key)
-                    # Usamos un poco más de temperatura para creatividad
+                    client = openai.OpenAI() # Usa la key configurada globalmente
                     response = client.chat.completions.create(
-                        model="gpt-3.5-turbo", 
+                        model="gpt-3.5-turbo",
                         messages=messages,
-                        temperature=0.8,
-                        max_tokens=600 # Permitimos respuestas más largas
+                        temperature=0.8
                     )
                     reply = response.choices[0].message.content
                     
-                    message_placeholder.markdown(f"**{agent_name}:** \n\n{reply}")
+                    message_placeholder.markdown(f"**{agent_name}:**\n{reply}")
                     st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
-                    time.sleep(1) 
+                    time.sleep(1.5) # Pausa dramática
                     
                 except Exception as e:
                     st.error(f"Error: {e}")
-                    st.session_state.simulation_active = False
-                    st.stop()
     
-    progress_bar.empty()
-    status_text.empty()
-    st.success("✅ Debate finalizado. Ahora es tu turno de intervenir.")
     st.session_state.simulation_active = False
+    st.success("✅ Debate finalizado. Puedes responder o Generar el Reporte.")
     st.rerun()
 
-# 4. INTERVENCIÓN DE SOFÍA (CONTINUAR EL LOOP)
-if not st.session_state.simulation_active and len(st.session_state.messages) > 0:
-    st.write("---")
-    new_input = st.chat_input("Aporta nueva información, responde a una crítica o cambia el rumbo...")
-    if new_input:
-        st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia (CEO)"})
-        # Al responder tú, reactivamos la simulación para que ellos respondan a tu nuevo input
-        st.session_state.simulation_active = True
-        st.rerun()
+# 4. OPCIONES FINALES: RESPONDER O REPORTE
+if not st.session_state.simulation_active and len(st.session_state.messages) > 1:
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        new_input = st.chat_input("Responde a los agentes para seguir peleando...")
+        if new_input:
+            st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia (CEO)"})
+            st.session_state.simulation_active = True
+            st.rerun()
+            
+    with col2:
+        if st.button("📊 GENERAR REPORTE C8"):
+            with st.spinner("Analizando debate y generando Insights..."):
+                # Prompt especial para el reporte
+                report_messages = [{"role": "system", "content": """
+                Actúa como el DIRECTOR DE INTELIGENCIA C8.
+                Analiza todo el debate anterior y genera un reporte EJECUTIVO.
+                Usa EXACTAMENTE este formato:
+                
+                ### 📊 REPORTE DE INTELIGENCIA C8
+                
+                **1. ⚠️ El Punto Débil (Lo que hay que ajustar):**
+                [Texto aquí]
+                
+                **2. 🌟 El "Wow" Factor (Lo que enamora):**
+                [Texto aquí]
+                
+                **3. 🚀 La Oportunidad de Expansión:**
+                [Texto aquí]
+                
+                **4. 🏁 Veredicto Final:**
+                [Frase contundente de aprobación o rechazo]
+                """}]
+                
+                # Añadir contexto
+                chat_text = "\n".join([f"{m['name']}: {m['content']}" for m in st.session_state.messages])
+                report_messages.append({"role": "user", "content": f"Analiza este debate:\n{chat_text}"})
+                
+                client = openai.OpenAI()
+                report = client.chat.completions.create(model="gpt-3.5-turbo", messages=report_messages).choices[0].message.content
+                
+                st.markdown(f"<div class='report-box'>{report}</div>", unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": report, "name": "C8 INTELLIGENCE"})
