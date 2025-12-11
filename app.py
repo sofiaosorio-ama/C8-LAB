@@ -3,37 +3,39 @@ import openai
 import time
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="C8 Synth-Lab", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="C8 Synth-Lab 2.0", page_icon="🧬", layout="wide")
 
 # --- ESTILOS VISUALES (C8 BRANDING) ---
 st.markdown("""
 <style>
-    .stChatMessage { border-radius: 10px; padding: 10px; margin-bottom: 10px;}
+    .stChatMessage { border-radius: 10px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .user-message { background-color: #f0f2f6; }
-    h1 { color: #2C3E50; }
-    .stButton button { width: 100%; border-radius: 5px; }
+    h1 { color: #1E293B; font-family: 'Helvetica', sans-serif; }
+    .stButton button { width: 100%; border-radius: 8px; font-weight: bold; }
+    .reportview-container .main .block-container { max-width: 1000px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. MEMORIA DEL SISTEMA (Estado Persistente) ---
+# --- 1. MEMORIA DEL SISTEMA ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "simulation_active" not in st.session_state:
     st.session_state.simulation_active = False
 
-# AQUÍ ESTÁ LA MAGIA: Guardamos los arquetipos en la memoria para no perderlos
+# ARQUETIPOS EN MEMORIA
 if "c8_archetypes" not in st.session_state:
     st.session_state.c8_archetypes = {
-        "El Visionario": "Eres un estratega soñador. Buscas el propósito, la expansión y el impacto a largo plazo. Te emocionan las ideas grandes.",
-        "El Provocador": "Eres disruptivo y directo. Odias los clichés. Cuestionas todo lo que suena a 'vendehumos'. Buscas la innovación radical.",
-        "El Educador": "Eres metódico y pedagógico. Te importa la estructura, el paso a paso y que el cliente entienda el proceso. Buscas claridad.",
-        "El Curador": "Eres un esteta perfeccionista. Buscas la excelencia, la calidad visual y la experiencia premium. Odias lo mediocre.",
-        "El Cliente Escéptico": "Eres un cliente que ha comprado cursos malos. No confías fácil. Buscas ROI (Retorno de Inversión) rápido y seguridad."
+        "El Visionario": "Eres un estratega soñador. Tu foco: Expansión, Propósito y Futuro. No te preocupan los detalles técnicos, sino la GRAN visión. Usas metáforas inspiradoras.",
+        "El Provocador": "Eres disruptivo, directo y un poco cínico. Odias los clichés de marketing. Tu trabajo es encontrar el punto débil, lo aburrido o lo falso de la idea. Retas al usuario.",
+        "El Educador": "Eres metódico y estructurado. Te obsesiona la claridad, el paso a paso y la pedagogía. Preguntas: ¿Es accionable? ¿Se entiende? ¿Cuál es la metodología?",
+        "El Curador": "Eres un esteta perfeccionista. Buscas la excelencia visual, la experiencia de usuario premium y la diferenciación por calidad. Odias lo 'barato' o genérico.",
+        "El Estratega de Negocio": "Eres frío y calculador. Solo te importa el ROI, el Margen, la Escalabilidad y el Modelo de Negocio. Si no da dinero, no sirve."
     }
 
 # --- BARRA LATERAL ---
 with st.sidebar:
-    st.title("🎛️ Panel C8")
+    st.image("https://cdn-icons-png.flaticon.com/512/1048/1048927.png", width=50)
+    st.title("🎛️ Centro de Mando C8")
     
     # API Key
     api_key = st.text_input("Tu OpenAI API Key", type="password")
@@ -42,108 +44,153 @@ with st.sidebar:
     
     st.divider()
 
-    # --- CREADOR DE ARQUETIPOS (Ahora con memoria) ---
-    with st.expander("✨ Crear Nuevo Agente", expanded=False):
-        new_name = st.text_input("Nombre del Rol (ej: Inversor)")
-        new_desc = st.text_area("Personalidad / Prompt")
-        
-        if st.button("Guardar Agente"):
-            if new_name and new_desc:
-                # Guardamos en la memoria persistente
-                st.session_state.c8_archetypes[new_name] = new_desc
-                st.success(f"¡{new_name} creado!")
-                time.sleep(1)
-                st.rerun() # Recargamos para que aparezca en la lista de abajo
+    # --- CONFIGURACIÓN DE LA SALA ---
+    st.subheader("📍 Configuración del Escenario")
+    
+    scenario = st.selectbox(
+        "¿Cuál es la situación actual?",
+        ["Validación de Idea Nueva", "Preparación de Lanzamiento", "Rebranding / Cambio de Imagen", "Crisis de Reputación", "Escalado de Negocio", "Creación de Contenido"]
+    )
+    
+    rounds = st.slider("🔄 Rondas de Debate (Profundidad)", min_value=1, max_value=5, value=2, help="Cuántas veces hablará cada agente.")
 
     st.divider()
 
-    # --- SELECTOR DE AGENTES ---
-    # Ahora lee de la memoria, así que incluye los nuevos que creaste
-    st.subheader("👥 El Consejo de Sabios")
-    
-    # Lista actualizada con tus creaciones
+    # --- EQUIPO ---
+    st.subheader("👥 El Consejo C8")
     options_list = list(st.session_state.c8_archetypes.keys())
-    
     selected_archetypes = st.multiselect(
-        "¿Quién entra a la sala?",
+        "Selecciona a los expertos:",
         options=options_list,
-        default=["El Visionario", "El Provocador"] if "El Visionario" in options_list else []
+        default=["El Visionario", "El Provocador", "El Estratega de Negocio"]
     )
 
-    if st.button("🧹 Limpiar Chat"):
+    # CREAR NUEVO
+    with st.expander("✨ + Añadir Nuevo Experto"):
+        new_name = st.text_input("Nombre del Rol")
+        new_desc = st.text_area("Personalidad / Enfoque")
+        if st.button("Guardar Experto"):
+            if new_name and new_desc:
+                st.session_state.c8_archetypes[new_name] = new_desc
+                st.success(f"¡{new_name} añadido!")
+                time.sleep(1)
+                st.rerun()
+
+    if st.button("🗑️ Reiniciar Sesión"):
         st.session_state.messages = []
         st.session_state.simulation_active = False
         st.rerun()
 
 # --- INTERFAZ PRINCIPAL ---
-st.title("🧬 C8 Intelligence Universe")
+st.title("🧬 C8 Deep Intelligence Lab")
+st.markdown(f"**Escenario Activo:** `{scenario}` | **Modo:** `Debate Multidireccional`")
 
 # 1. INPUT DEL USUARIO
 if len(st.session_state.messages) == 0:
-    st.info("👋 Bienvenida al Laboratorio C8. Configura tu equipo a la izquierda y lanza un tema.")
-    initial_idea = st.chat_input("Escribe tu idea, copy o estrategia aquí...")
-    if initial_idea:
-        st.session_state.messages.append({"role": "user", "content": initial_idea, "name": "Sofia"})
-        st.session_state.simulation_active = True
-        st.rerun()
+    with st.container():
+        st.info(f"👋 Hola Sofía. Tus expertos están listos para simular un escenario de **{scenario}**.")
+        initial_idea = st.chat_input("Escribe la idea, copy o estrategia a debatir...")
+        if initial_idea:
+            st.session_state.messages.append({"role": "user", "content": initial_idea, "name": "Sofia (CEO)"})
+            st.session_state.simulation_active = True
+            st.rerun()
 
-# 2. MOSTRAR HISTORIAL (Visualización mejorada)
+# 2. MOSTRAR HISTORIAL
 for msg in st.session_state.messages:
-    # Elegimos avatar según quién hable
-    avatar = "👩‍💻" if msg["role"] == "user" else "🤖"
-    
+    avatar = "👩‍💻" if msg["role"] == "user" else "⚡"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(f"**{msg.get('name', 'AI')}:**")
         st.write(msg["content"])
 
-# 3. MOTOR DE SIMULACIÓN
+# 3. MOTOR DE DEBATE (LOOP COMPLEJO)
 if st.session_state.simulation_active:
     if not api_key:
-        st.warning("⚠️ Pega tu API Key a la izquierda para iniciar.")
+        st.warning("⚠️ Necesitas la API Key para activar el cerebro.")
         st.stop()
 
-    st.write("---")
-    st.caption("⚡ Analizando con Metodología C8...")
+    # BUCLE DE RONDAS (Aquí está la potencia)
+    total_turns = rounds * len(selected_archetypes)
     
-    # Bucle de agentes seleccionados
-    for agent_name in selected_archetypes:
-        with st.chat_message("assistant", avatar="🧠"):
-            message_placeholder = st.empty()
+    st.divider()
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    current_turn = 0
+    
+    # Iteramos por el número de rondas solicitadas
+    for r in range(rounds):
+        st.markdown(f"### 🔄 Ronda {r + 1} de {rounds}")
+        
+        for agent_name in selected_archetypes:
+            # Actualizar barra de progreso
+            current_turn += 1
+            progress = current_turn / total_turns
+            progress_bar.progress(progress)
+            status_text.caption(f"Pensando: {agent_name} (Analizando contexto...)")
             
-            # Recuperamos la personalidad desde la memoria
-            agent_persona = st.session_state.c8_archetypes[agent_name]
-            
-            # Construimos la memoria del agente
-            messages = [{"role": "system", "content": f"Eres {agent_name}. Personalidad: {agent_persona}. Sé breve, directo y constructivo."}]
-            
-            # Añadimos contexto reciente
-            for m in st.session_state.messages[-8:]:
-                role = "user" if m["role"] == "user" else "assistant"
-                messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
+            with st.chat_message("assistant", avatar="🧠"):
+                message_placeholder = st.empty()
+                
+                # RECUPERAR PERSONALIDAD
+                agent_persona = st.session_state.c8_archetypes[agent_name]
+                
+                # PROMPT DE INGENIERÍA AVANZADA
+                # Le damos instrucciones de debatir con los anteriores
+                system_prompt = f"""
+                Eres {agent_name}. 
+                Tu personalidad es: {agent_persona}.
+                
+                CONTEXTO:
+                - Escenario: {scenario}
+                - Ronda actual: {r + 1} de {rounds}.
+                
+                OBJETIVO:
+                Analiza la idea del usuario y las respuestas de los otros agentes.
+                No seas genérico. Profundiza.
+                Si estás en la Ronda 1: Da tu primera impresión fuerte.
+                Si estás en Rondas siguientes: REFUTA o APOYA lo que dijeron los otros agentes antes que tú. Genera debate.
+                Usa formato Markdown (negritas, listas) para estructurar tu respuesta.
+                """
+                
+                messages = [{"role": "system", "content": system_prompt}]
+                
+                # Inyectamos toda la memoria de la conversación
+                for m in st.session_state.messages:
+                    role = "user" if m["role"] == "user" else "assistant"
+                    messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
 
-            try:
-                client = openai.OpenAI(api_key=api_key)
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=messages
-                )
-                reply = response.choices[0].message.content
-                
-                # Renderizado
-                message_placeholder.markdown(f"**{agent_name}:** {reply}")
-                st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
-                time.sleep(0.5) # Ritmo de lectura
-                
-            except Exception as e:
-                st.error(f"Error de conexión: {e}")
+                try:
+                    client = openai.OpenAI(api_key=api_key)
+                    # Usamos un poco más de temperatura para creatividad
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo", 
+                        messages=messages,
+                        temperature=0.8,
+                        max_tokens=600 # Permitimos respuestas más largas
+                    )
+                    reply = response.choices[0].message.content
+                    
+                    message_placeholder.markdown(f"**{agent_name}:** \n\n{reply}")
+                    st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
+                    time.sleep(1) 
+                    
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    st.session_state.simulation_active = False
+                    st.stop()
     
+    progress_bar.empty()
+    status_text.empty()
+    st.success("✅ Debate finalizado. Ahora es tu turno de intervenir.")
     st.session_state.simulation_active = False
     st.rerun()
 
-# 4. CONTINUAR DEBATE
+# 4. INTERVENCIÓN DE SOFÍA (CONTINUAR EL LOOP)
 if not st.session_state.simulation_active and len(st.session_state.messages) > 0:
-    new_input = st.chat_input("Responde a los agentes para continuar...")
+    st.write("---")
+    new_input = st.chat_input("Aporta nueva información, responde a una crítica o cambia el rumbo...")
     if new_input:
-        st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia"})
+        st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia (CEO)"})
+        # Al responder tú, reactivamos la simulación para que ellos respondan a tu nuevo input
         st.session_state.simulation_active = True
         st.rerun()
