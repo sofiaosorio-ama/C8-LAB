@@ -118,16 +118,12 @@ if st.session_state.simulation_active:
                 )
                 response_text = response.choices[0].message.content
                 
-                # Efecto de escritura tipo máquina
-                for chunk in response_text.split():
-                    full_response += chunk + " "
-                    time.sleep(0.05)
-                    message_placeholder.markdown(f"**{agent_name}:** " + full_response + "▌")
-                message_placeholder.markdown(f"**{agent_name}:** " + full_response)
-                
-                # Guardar en historial
-                st.session_state.messages.append({"role": "assistant", "content": full_response, "name": agent_name})
-                time.sleep(1) # Pequeña pausa entre agentes
+               # Mostrar respuesta directa (Sin efectos para evitar errores)
+            message_placeholder.markdown(f"**{agent_name}:** {response_text}")
+            
+            # Guardar en historial
+            st.session_state.messages.append({"role": "assistant", "content": response_text, "name": agent_name})
+            time.sleep(1) # Pausa para leer
                 
             except Exception as e:
                 st.error(f"Error con la IA: {e}")
@@ -143,4 +139,5 @@ if not st.session_state.simulation_active and len(st.session_state.messages) > 0
     if new_input:
         st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia (Arquitecta)"})
         st.session_state.simulation_active = True # Reactivar a los agentes
+
         st.rerun()
