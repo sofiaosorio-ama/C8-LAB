@@ -6,20 +6,21 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Sistema de Inteligencia C8", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="C8 Intelligence System", page_icon="🧬", layout="wide")
 
-# --- ESTILOS VISUALES ---
+# --- ESTILOS VISUALES LIMPIOS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    .stChatMessage { background-color: #ffffff !important; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 15px; color: #000000 !important; }
-    .stChatMessage p, .stChatMessage li, .stChatMessage h1 { color: #1E293B !important; }
-    div[data-testid="stChatMessage"]:nth-child(odd) { border-left: 6px solid #2196F3; }
-    div[data-testid="stChatMessage"]:nth-child(even) { border-left: 6px solid #000000; background-color: #f8f9fa !important; }
-    .report-box { background-color: #e3f2fd; padding: 25px; border-radius: 10px; border: 1px solid #90caf9; margin-top: 20px; }
-    .report-box p { color: #0d47a1 !important; }
-    .stButton button { width: 100%; border-radius: 8px; font-weight: 600; }
+    
+    .stChatMessage { background-color: #ffffff !important; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 10px; color: #0f172a !important; }
+    .stChatMessage p, .stChatMessage li { color: #334155 !important; font-size: 16px; line-height: 1.6; }
+    
+    div[data-testid="stChatMessage"]:nth-child(odd) { border-left: 5px solid #2563eb; } /* IA */
+    div[data-testid="stChatMessage"]:nth-child(even) { border-left: 5px solid #000000; background-color: #f8fafc !important; } /* Humano */
+    
+    .status-badge { background-color: #dcfce7; color: #166534; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; border: 1px solid #bbf7d0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -34,10 +35,32 @@ def connect_to_gsheets():
             client = gspread.authorize(creds)
             sheet = client.open("C8_DB")
             return sheet
-        else:
-            return None
-    except Exception as e:
+    except:
         return None
+
+# --- FUNCIÓN DE AUTOGUARDADO (SILENCIOSA) ---
+def autosave_chat(user, messages):
+    sheet = connect_to_gsheets()
+    if sheet and len(messages) > 1:
+        try:
+            ws_chats = sheet.worksheet("Chats")
+            # Si es el primer mensaje, creamos título automático
+            first_user_msg = next((m["content"] for m in messages if m["role"] == "user"), "Sin Título")
+            chat_title = f"{first_user_msg[:30]}... ({datetime.now().strftime('%d/%m %H:%M')})"
+            
+            # Preparamos filas
+            rows = []
+            now = str(datetime.now())
+            for m in messages:
+                # Evitamos guardar duplicados simples chequeando lógica básica o simplemente guardamos el lote
+                rows.append([chat_title, now, m["role"], m["name"], m["content"], user])
+            
+            # Guardamos todo el lote al final
+            ws_chats.append_rows(rows)
+            return True
+        except:
+            return False
+    return False
 
 # --- GESTIÓN DE API KEY ---
 try:
@@ -56,248 +79,178 @@ if "simulation_active" not in st.session_state:
     st.session_state.simulation_active = False
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
 
-# --- SISTEMA DE LOGIN Y REGISTRO ---
-def login_page():
+# --- LOGIN ---
+def login_screen():
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
         st.image("https://cdn-icons-png.flaticon.com/512/2083/2083213.png", width=80)
-        st.markdown("<h2 style='text-align: center;'>Acceso Inteligencia C8</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>C8 Intelligence Hub</h2>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["🔐 Iniciar Sesión", "📝 Registrarse"])
-        
-        # --- TAB 1: LOGIN ---
+        tab1, tab2 = st.tabs(["Ingresar", "Registrar Nuevo"])
         with tab1:
-            username = st.text_input("Usuario", key="login_user")
-            password = st.text_input("Contraseña", type="password", key="login_pass")
-            
-            if st.button("Entrar", key="btn_login"):
+            u = st.text_input("Usuario", key="l_u")
+            p = st.text_input("Contraseña", type="password", key="l_p")
+            if st.button("Acceder"):
                 sheet = connect_to_gsheets()
                 if sheet:
                     try:
-                        ws_users = sheet.worksheet("Usuarios")
-                        users_data = ws_users.get_all_records()
-                        
-                        # Buscar usuario
-                        user_found = False
-                        for user in users_data:
-                            if str(user["Usuario"]) == username and str(user["Password"]) == password:
+                        users = sheet.worksheet("Usuarios").get_all_records()
+                        for user in users:
+                            if str(user["Usuario"]) == u and str(user["Password"]) == p:
                                 st.session_state.authenticated = True
-                                st.session_state.current_user = username
-                                st.success(f"¡Bienvenida de nuevo, {user['Nombre']}!")
-                                time.sleep(1)
+                                st.session_state.current_user = u
                                 st.rerun()
-                                user_found = True
-                                break
-                        
-                        if not user_found:
-                            st.error("Usuario o contraseña incorrectos.")
-                    except:
-                        st.error("Error conectando a base de usuarios.")
-                else:
-                    st.error("Error de conexión con Google Sheets.")
-
-        # --- TAB 2: REGISTRO ---
+                        st.error("Acceso denegado")
+                    except: st.error("Error DB")
         with tab2:
-            new_user = st.text_input("Elige un Usuario", key="reg_user")
-            new_pass = st.text_input("Elige una Contraseña", type="password", key="reg_pass")
-            new_name = st.text_input("Tu Nombre Real", key="reg_name")
-            
-            if st.button("Crear Cuenta", key="btn_reg"):
+            nu = st.text_input("Nuevo Usuario")
+            np = st.text_input("Nueva Contraseña", type="password")
+            nn = st.text_input("Nombre")
+            if st.button("Crear Cuenta"):
                 sheet = connect_to_gsheets()
-                if sheet and new_user and new_pass:
+                if sheet:
                     try:
-                        ws_users = sheet.worksheet("Usuarios")
-                        # Verificar si ya existe
-                        existing_users = ws_users.col_values(1)
-                        if new_user in existing_users:
-                            st.warning("⚠️ Ese usuario ya existe. Elige otro.")
-                        else:
-                            ws_users.append_row([new_user, new_pass, new_name, str(datetime.now())])
-                            st.success("✅ ¡Cuenta creada con éxito! Ahora inicia sesión.")
-                    except Exception as e:
-                        st.error(f"Error al registrar: {e}")
-                else:
-                    st.warning("Por favor completa todos los campos.")
+                        sheet.worksheet("Usuarios").append_row([nu, np, nn, str(datetime.now())])
+                        st.success("Creado. Inicia sesión.")
+                    except: st.error("Error creando.")
 
-# --- APLICACIÓN PRINCIPAL ---
+# --- APP PRINCIPAL ---
 def main_app():
     user = st.session_state.current_user
     
-    # Cargar Arquetipos Base
+    # Arquetipos Base (Prompting Agresivo)
     active_archetypes = {
-        "El Provocador": "ERES EL PROVOCADOR. Tono: Cínico, agresivo. (Golpea la mesa).",
-        "El Educador": "ERES EL EDUCADOR. Tono: Calmado, pedagógico. (Se ajusta las gafas).",
-        "El Curador": "ERES EL CURADOR. Tono: Exigente, esteta. (Mira con ojo crítico).",
-        "El Visionario": "ERES EL VISIONARIO. Tono: Inspirador. (Mira al horizonte)."
+        "El Provocador": "ERES EL PROVOCADOR. Tono: Sarcástico, duro. Misión: Buscar el fallo financiero o lógico. PREGUNTA: ¿Dónde está la plata? ¿Por qué alguien pagaría?",
+        "El Educador": "ERES EL EDUCADOR. Tono: Analítico. Misión: Buscar la estructura. PREGUNTA: ¿Cuál es el paso 1, 2 y 3? ¿Es confuso?",
+        "El Curador": "ERES EL CURADOR. Tono: Exigente. Misión: Buscar la calidad. PREGUNTA: ¿Es visualmente horrible? ¿Se siente barato?",
+        "La Gen-Z": "ERES LA GEN-Z. Tono: Viral, rápido, slang. Misión: Buscar el 'cringe'. PREGUNTA: ¿Esto es aburrido? ¿Es instagrameable?"
     }
     
-    # Cargar Agentes de Google Sheets
+    # Cargar personalizados
     sheet = connect_to_gsheets()
     if sheet:
         try:
-            ws_agents = sheet.worksheet("Agentes")
-            agents_data = ws_agents.get_all_records()
-            for agent in agents_data:
-                # Filtrar si quieres que sean públicos o privados (ahora son públicos para todos)
-                active_archetypes[agent["Nombre"]] = agent["Personalidad"]
-        except:
-            pass 
+            for r in sheet.worksheet("Agentes").get_all_records():
+                active_archetypes[r["Nombre"]] = r["Personalidad"]
+        except: pass
 
-    # --- SIDEBAR ---
+    # SIDEBAR
     with st.sidebar:
-        st.markdown(f"### 👤 {user.upper()}")
-        if st.button("Cerrar Sesión"):
+        st.markdown(f"**👤 {user.upper()}**")
+        if st.button("Salir"):
             st.session_state.authenticated = False
-            st.session_state.current_user = None
             st.rerun()
-        
         st.divider()
         
-        # 1. HISTORIAL (FILTRADO POR USUARIO - Próxima mejora, ahora ve todos)
-        st.subheader("📂 Chats Guardados")
-        if st.button("🔄 Actualizar"):
-            st.rerun()
-            
+        # Historial (Solo lectura rápida)
+        st.caption("📂 Historial Nube")
         if sheet:
             try:
-                ws_chats = sheet.worksheet("Chats")
-                # Solo cargamos los títulos para el selector
-                titles = ws_chats.col_values(1)[1:] 
-                unique_titles = list(set(titles))
-                selected_chat = st.selectbox("Abrir Chat:", ["-"] + unique_titles)
-                
-                if selected_chat != "-":
-                    if st.button("📂 Cargar"):
-                        all_rows = ws_chats.get_all_records()
-                        # Filtramos las filas que coincidan con el título
-                        chat_rows = [row for row in all_rows if row["Titulo"] == selected_chat]
-                        
-                        loaded_msgs = []
-                        for row in chat_rows:
-                            loaded_msgs.append({"role": row["Role"], "name": row["Name"], "content": row["Content"]})
-                        
-                        st.session_state.messages = loaded_msgs
-                        st.success("Chat cargado.")
-                        time.sleep(1)
-                        st.rerun()
-            except:
-                st.caption("Sin conexión a historial.")
+                titles = list(set(sheet.worksheet("Chats").col_values(1)[1:]))
+                sel = st.selectbox("Cargar anterior:", ["-"] + titles)
+                if sel != "-" and st.button("Ver"):
+                    rows = [r for r in sheet.worksheet("Chats").get_all_records() if r["Titulo"] == sel]
+                    st.session_state.messages = [{"role": r["Role"], "name": r["Name"], "content": r["Content"]} for r in rows]
+                    st.rerun()
+            except: pass
         
         st.divider()
-
-        # 2. CREADOR AGENTES
-        with st.expander("✨ Crear Nuevo Agente"):
-            new_name = st.text_input("Nombre Rol")
-            new_desc = st.text_area("Personalidad")
-            if st.button("Guardar"):
-                if new_name and new_desc and sheet:
-                    try:
-                        ws_agents = sheet.worksheet("Agentes")
-                        if not ws_agents.row_values(1):
-                            ws_agents.append_row(["Nombre", "Personalidad", "Creador", "Fecha"])
-                        
-                        full_desc = f"ERES {new_name.upper()}.\nPersonalidad: {new_desc}\nInstrucción: Actúa acorde."
-                        ws_agents.append_row([new_name, full_desc, user, str(datetime.now())])
-                        st.success("Agente creado.")
-                        time.sleep(1)
-                        st.rerun()
-                    except:
-                        st.error("Error al guardar.")
-
+        with st.expander("✨ Nuevo Agente"):
+            an = st.text_input("Nombre")
+            ad = st.text_input("Personalidad")
+            if st.button("Guardar Agente") and sheet:
+                sheet.worksheet("Agentes").append_row([an, ad, user, str(datetime.now())])
+                st.success("Guardado")
+        
         st.divider()
-        scenario = st.selectbox("Escenario:", ["Validación Idea", "Lanzamiento", "Crisis", "Pitch"])
-        selected_archetypes = st.multiselect("Consejo:", options=list(active_archetypes.keys()), default=["El Provocador", "El Educador"])
-
-        if st.button("🗑️ Limpiar Pantalla"):
+        scenario = st.selectbox("Situación:", ["Validación Idea", "Lanzamiento", "Crisis", "Pitch"])
+        team = st.multiselect("Consejo:", list(active_archetypes.keys()), default=["El Provocador", "El Educador"])
+        if st.button("🗑️ Nuevo Chat"):
             st.session_state.messages = []
             st.rerun()
 
-    # --- PANTALLA PRINCIPAL ---
-    st.title(f"🧬 Laboratorio C8: {scenario}")
+    # CHAT AREA
+    st.title(f"🧬 C8 Lab: {scenario}")
 
-    if len(st.session_state.messages) == 0:
-        st.info(f"Conectado como {user}. Agentes: {len(active_archetypes)}")
-        initial_idea = st.chat_input("Escribe tu idea...")
-        if initial_idea:
-            st.session_state.messages.append({"role": "user", "content": initial_idea, "name": user})
+    if not st.session_state.messages:
+        st.info("💡 Consejo: Sé específica. El equipo será duro contigo.")
+        idea = st.chat_input("Lanza tu idea...")
+        if idea:
+            st.session_state.messages.append({"role": "user", "content": idea, "name": user})
             st.session_state.simulation_active = True
             st.rerun()
 
-    for msg in st.session_state.messages:
-        avatar = "👩‍💻" if msg["role"] == "user" else "⚡"
-        if msg.get("name") == "C8 INTELLIGENCE": avatar = "📊"
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(f"**{msg.get('name')}**")
-            if msg.get("name") == "C8 INTELLIGENCE":
-                 st.markdown(f"<div class='report-box'>{msg['content']}</div>", unsafe_allow_html=True)
-            else:
-                 st.markdown(msg["content"])
+    for m in st.session_state.messages:
+        av = "👩‍💻" if m["role"] == "user" else "⚡"
+        with st.chat_message(m["role"], avatar=av):
+            st.markdown(f"**{m['name']}**")
+            st.markdown(m["content"])
 
-    # MOTOR SIMULACIÓN
+    # LOGICA DE SIMULACIÓN AUTOMÁTICA
     if st.session_state.simulation_active:
-        if not api_key_configured:
-            st.warning("⚠️ Falta API Key.")
-            st.stop()
-        
         st.markdown("---")
+        
         rounds = 3
         for r in range(rounds):
-            st.markdown(f"#### 🔄 Ronda {r+1} de {rounds}")
-            for agent_name in selected_archetypes:
+            st.caption(f"🔥 Ronda de Fuego {r+1}/{rounds}")
+            for agent in team:
                 with st.chat_message("assistant", avatar="🎭"):
-                    with st.spinner(f"{agent_name}..."):
-                        persona = active_archetypes[agent_name]
-                        prompt = f"Estás interpretando a: {agent_name}\nPERFIL: {persona}\nCONTEXTO: {scenario}, Ronda {r+1}.\nINSTRUCCIÓN: Interactúa, usa teatro, sé breve."
-                        msgs = [{"role": "system", "content": prompt}]
+                    with st.spinner(f"{agent} analizando..."):
+                        
+                        # PROMPT ANTI-REPETICIÓN Y PREGUNTAS CLAVE
+                        prompt = f"""
+                        ERES: {agent}
+                        PERFIL: {active_archetypes[agent]}
+                        CONTEXTO: {scenario}, Ronda {r+1} de 3.
+                        
+                        TU OBJETIVO AHORA MISMO:
+                        1. NO repitas tu introducción. Ve al grano.
+                        2. Si es Ronda 1: Da tu opinión brutal inicial.
+                        3. Si es Ronda 2 o 3: ATACA lo que dijeron los otros o CUESTIONA a Sofía.
+                        4. TERMINA TU MENSAJE CON UNA PREGUNTA DIRECTA (ej: "¿Cómo piensas escalar X?", "¿Dónde está la prueba de Y?").
+                        5. Sé breve (máximo 3 párrafos).
+                        """
+                        
+                        hist = [{"role": "system", "content": prompt}]
                         for m in st.session_state.messages:
-                            msgs.append({"role": "user" if m["role"]=="user" else "assistant", "content": f"{m.get('name')}: {m['content']}"})
+                            hist.append({"role": "user" if m["role"]=="user" else "assistant", "content": f"{m['name']}: {m['content']}"})
                         
                         try:
-                            client = openai.OpenAI()
-                            res = client.chat.completions.create(model="gpt-3.5-turbo", messages=msgs, temperature=0.85, max_tokens=550)
+                            # frequency_penalty=0.5 EVITA QUE REPITAN FRASES
+                            res = openai.chat.completions.create(
+                                model="gpt-3.5-turbo", 
+                                messages=hist, 
+                                temperature=0.9, 
+                                frequency_penalty=0.5
+                            )
                             reply = res.choices[0].message.content
-                            st.markdown(f"**{agent_name}**")
+                            
+                            st.markdown(f"**{agent}**")
                             st.markdown(reply)
-                            st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
+                            st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent})
                         except Exception as e:
                             st.error(str(e))
                 time.sleep(0.5)
+        
+        # AUTOGUARDADO AL FINALIZAR
+        with st.spinner("☁️ Autoguardando en Google Sheets..."):
+            autosave_chat(user, st.session_state.messages)
+        st.toast("✅ Debate guardado en la nube automáticamente.", icon="☁️")
+        
         st.session_state.simulation_active = False
         st.rerun()
 
-    # GUARDAR
-    if not st.session_state.simulation_active and len(st.session_state.messages) > 1:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.chat_input("Responder...")
-        with col2:
-            save_name = st.text_input("Nombre Chat:", placeholder="Ej: Idea 1")
-            if st.button("💾 Guardar"):
-                if save_name and sheet:
-                    try:
-                        ws_chats = sheet.worksheet("Chats")
-                        if not ws_chats.row_values(1):
-                            ws_chats.append_row(["Titulo", "Fecha", "Role", "Name", "Content", "Owner"])
-                        
-                        rows_to_add = []
-                        now = str(datetime.now())
-                        for m in st.session_state.messages:
-                            # Añadimos columna de "Owner" (Dueño) para filtrar en el futuro
-                            rows_to_add.append([save_name, now, m["role"], m["name"], m["content"], user])
-                        
-                        for row in rows_to_add:
-                            ws_chats.append_row(row)
-                        st.success("¡Archivado!")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+    # INPUT PARA CONTINUAR
+    if not st.session_state.simulation_active and st.session_state.messages:
+        new_idea = st.chat_input("Responde a sus preguntas...")
+        if new_idea:
+            st.session_state.messages.append({"role": "user", "content": new_idea, "name": user})
+            st.session_state.simulation_active = True
+            st.rerun()
 
-# --- FLUJO ---
 if st.session_state.authenticated:
     main_app()
 else:
-    login_page()
+    login_screen()
