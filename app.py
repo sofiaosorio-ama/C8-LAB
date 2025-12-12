@@ -182,3 +182,65 @@ if st.session_state.simulation_active:
                 - Ronda: {r + 1} de {rounds_fixed}
                 
                 INSTRUCCIONES DE ACTUACIÓN REALISTA:
+                1. INTERACTÚA: Menciona a los otros agentes por nombre. Discute con ellos.
+                2. TEATRO: Usa acotaciones entre paréntesis. Ej: (Se levanta), (Golpea la mesa).
+                3. PROFUNDIDAD: Haz preguntas difíciles a Sofía. No seas complaciente.
+                4. TONO: Usa el tono descrito en tu perfil. Si eres el Provocador, sé agresivo.
+                
+                HISTORIAL:
+                """
+                
+                messages = [{"role": "system", "content": system_prompt}]
+                for m in st.session_state.messages:
+                    role = "user" if m["role"] == "user" else "assistant"
+                    messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
+
+                try:
+                    client = openai.OpenAI() 
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages,
+                        temperature=0.85, 
+                        max_tokens=550
+                    )
+                    reply = response.choices[0].message.content
+                    
+                    message_placeholder.markdown(f"**{agent_name}**\n\n{reply}")
+                    st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
+                    time.sleep(1) 
+                    
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    
+    st.session_state.simulation_active = False
+    st.success("✅ Debate finalizado.")
+    st.rerun()
+
+# 4. ACCIONES FINALES
+if not st.session_state.simulation_active and len(st.session_state.messages) > 1:
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        new_input = st.chat_input("Responde al Consejo...")
+        if new_input:
+            st.session_state.messages.append({"role": "user", "content": new_input, "name": "Sofia (CEO)"})
+            st.session_state.simulation_active = True
+            st.rerun()
+    with col2:
+        if st.button("📊 Reporte C8"):
+            with st.spinner("Generando Insights..."):
+                report_messages = [{"role": "system", "content": """
+                Actúa como el DIRECTOR DE INTELIGENCIA C8.
+                Genera un reporte EJECUTIVO FINAL.
+                Formato Markdown:
+                ### 📊 REPORTE DE INTELIGENCIA C8
+                **1. ⚠️ Puntos de Fricción:**
+                **2. 🌟 Factor C8 (Strength):**
+                **3. 🚀 Oportunidades:**
+                **4. 🏁 Veredicto:**
+                """}]
+                chat_text = "\n".join([f"{m.get('name')}: {m['content']}" for m in st.session_state.messages])
+                report_messages.append({"role": "user", "content": f"Analiza:\n{chat_text}"})
+                client = openai.OpenAI()
+                report = client.chat.completions.create(model="gpt-3.5-turbo", messages=report_messages).choices[0].message.content
+                st.session_state.messages.append({"role": "assistant", "content": report, "name": "C8 INTELLIGENCE"})
+                st.rerun()
