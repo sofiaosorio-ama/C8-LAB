@@ -2,33 +2,69 @@ import streamlit as st
 import openai
 import time
 
-# --- CONFIGURACIÓN DE PÁGINA PROFESIONAL ---
+# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="C8 Intelligence System", page_icon="🧬", layout="wide")
 
-# --- DISEÑO C8 PRO (CSS) ---
+# --- CORRECCIÓN VISUAL (EL PARCHE DE COLOR) ---
 st.markdown("""
 <style>
+    /* Importamos fuente profesional */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* BURBUJAS DE CHAT: FORZAMOS TEXTO NEGRO */
     .stChatMessage {
-        background-color: #ffffff;
+        background-color: #ffffff !important; /* Fondo Blanco */
         border: 1px solid #e0e0e0;
         border-radius: 12px;
         padding: 20px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         margin-bottom: 15px;
+        color: #000000 !important; /* TEXTO NEGRO OBLIGATORIO */
     }
-    div[data-testid="stChatMessage"]:nth-child(odd) { border-left: 5px solid #2196F3; }
-    div[data-testid="stChatMessage"]:nth-child(even) { border-left: 5px solid #000000; background-color: #f8f9fa; }
     
+    /* Aseguramos que todo el texto dentro del chat sea legible */
+    .stChatMessage p, .stChatMessage li, .stChatMessage h1, .stChatMessage h2, .stChatMessage h3 {
+        color: #1E293B !important; /* Gris oscuro casi negro */
+    }
+
+    /* Diferenciación visual Usuario vs IA */
+    div[data-testid="stChatMessage"]:nth-child(odd) {
+        border-left: 6px solid #2196F3; /* Borde Azul para IA */
+    }
+    div[data-testid="stChatMessage"]:nth-child(even) {
+        border-left: 6px solid #000000; /* Borde Negro para Sofia */
+        background-color: #f1f5f9 !important; /* Fondo gris muy suave para Sofia */
+    }
+
+    /* Caja de Reporte */
     .report-box {
-        background-color: #F0F4F8; padding: 25px; border-radius: 10px; border: 1px solid #D9E2EC; margin-top: 20px;
+        background-color: #e3f2fd; 
+        padding: 25px; 
+        border-radius: 10px; 
+        border: 1px solid #90caf9;
+        margin-top: 20px;
     }
+    
+    .report-box p, .report-box h3, .report-box li {
+        color: #0d47a1 !important; /* Texto azul oscuro para el reporte */
+    }
+    
+    /* Botones */
     .stButton button {
-        background-color: #1E293B; color: white; border-radius: 8px; font-weight: 600; width: 100%;
+        background-color: #1E293B; 
+        color: white !important; 
+        border-radius: 8px; 
+        font-weight: 600; 
+        width: 100%;
+        border: none;
     }
-    .stButton button:hover { background-color: #334155; color: white; }
+    .stButton button:hover {
+        background-color: #334155;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -48,7 +84,7 @@ if "messages" not in st.session_state:
 if "simulation_active" not in st.session_state:
     st.session_state.simulation_active = False
 
-# --- INICIALIZACIÓN DE ARQUETIPOS (BASE + PERSONALIZADOS) ---
+# --- INICIALIZACIÓN DE ARQUETIPOS ---
 if "c8_archetypes" not in st.session_state:
     st.session_state.c8_archetypes = {
         "El Provocador": """ERES EL PROVOCADOR.
@@ -59,7 +95,7 @@ if "c8_archetypes" not in st.session_state:
         "El Educador": """ERES EL EDUCADOR.
         Personalidad: Calmado, estructurado, protector del alumno.
         Acciones: (Se ajusta las gafas), (Toma notas), (Levanta la mano pidiendo calma).
-        Misión: Asegurar que sea enseñable y replicable. Busca el 'CÓMO'.""",
+        Misión: Asegurar que sea enseñable y replicable.""",
         
         "El Curador": """ERES EL CURADOR.
         Personalidad: Sofisticado, exigente, elitista.
@@ -69,10 +105,10 @@ if "c8_archetypes" not in st.session_state:
         "El Visionario": """ERES EL VISIONARIO.
         Personalidad: Inspirador, futurista, magnético.
         Acciones: (Mira al horizonte), (Extiende los brazos), (Sonríe con certeza).
-        Misión: Conectar la idea con el propósito mayor y el legado."""
+        Misión: Conectar la idea con el propósito mayor."""
     }
 
-# --- SIDEBAR: CENTRO DE MANDO ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2083/2083213.png", width=60)
     st.markdown("### C8 INTELLIGENCE™")
@@ -86,35 +122,34 @@ with st.sidebar:
     
     st.divider()
     
-    # 1. SELECTOR DE ESCENARIO
+    # 1. ESCENARIO
     st.subheader("📍 Escenario")
     scenario = st.selectbox(
-        "Contexto de la Simulación:",
+        "Contexto:",
         ["Validación de Idea Nueva", "Lanzamiento Oficial", "Pitch de Venta", "Gestión de Crisis", "Rebranding"]
     )
     
     st.divider()
 
-    # 2. FÁBRICA DE ARQUETIPOS (¡AQUÍ ESTÁ LA MAGIA!)
-    with st.expander("✨ FÁBRICA DE AGENTES C8", expanded=True):
-        st.caption("Crea un nuevo experto para tu consejo.")
-        new_name = st.text_input("Nombre del Rol (Ej: Inversor)")
-        new_desc = st.text_area("Personalidad y Actitud (Ej: Agresivo, solo le importa el dinero)")
+    # 2. FÁBRICA DE AGENTES C8
+    with st.expander("✨ FÁBRICA DE AGENTES C8"):
+        st.caption("Crea un nuevo experto.")
+        new_name = st.text_input("Nombre del Rol")
+        new_desc = st.text_area("Personalidad y Actitud")
         
         if st.button("💾 Crear Agente"):
             if new_name and new_desc:
-                # Guardamos en la memoria viva
                 st.session_state.c8_archetypes[new_name] = f"ERES {new_name.upper()}.\nPersonalidad: {new_desc}\nInstrucción: Actúa acorde a este rol exagerando tus rasgos."
-                st.success(f"¡{new_name} se ha unido al equipo!")
+                st.success(f"¡{new_name} creado!")
                 time.sleep(1)
                 st.rerun()
 
-    # 3. SELECTOR DE EQUIPO (Ahora incluye los nuevos)
+    # 3. EQUIPO
     st.subheader("👥 Consejo Activo")
-    options_list = list(st.session_state.c8_archetypes.keys()) # Lista dinámica
+    options_list = list(st.session_state.c8_archetypes.keys())
     
     selected_archetypes = st.multiselect(
-        "Selecciona quién entra a la sala:",
+        "Selecciona al equipo:",
         options=options_list,
         default=["El Provocador", "El Educador"]
     )
@@ -130,14 +165,14 @@ st.title(f"🧬 Laboratorio C8: {scenario}")
 
 # 1. INPUT INICIAL
 if len(st.session_state.messages) == 0:
-    st.info(f"👋 Bienvenida, Arquitecta. Configura tu equipo a la izquierda y lanza el tema.")
+    st.info(f"👋 Bienvenida, Arquitecta. Configura tu equipo y lanza el tema.")
     initial_idea = st.chat_input("Escribe tu idea, promesa o copy aquí...")
     if initial_idea:
         st.session_state.messages.append({"role": "user", "content": initial_idea, "name": "Sofia (CEO)"})
         st.session_state.simulation_active = True
         st.rerun()
 
-# 2. VISUALIZACIÓN DEL CHAT
+# 2. VISUALIZACIÓN DEL CHAT (CORREGIDA)
 for msg in st.session_state.messages:
     avatar = "👩‍💻" if msg["role"] == "user" else "⚡"
     if msg.get("name") == "C8 INTELLIGENCE": avatar = "📊"
@@ -150,7 +185,7 @@ for msg in st.session_state.messages:
         else:
              st.markdown(msg["content"])
 
-# 3. MOTOR DE SIMULACIÓN HUMANA (V5.0)
+# 3. MOTOR DE SIMULACIÓN (ESTABLE - SIN ERROR REMOVECHILD)
 if st.session_state.simulation_active:
     if not api_key_configured:
         st.warning("⚠️ Falta API Key.")
@@ -158,7 +193,6 @@ if st.session_state.simulation_active:
 
     st.markdown("---")
     
-    # RONDAS FIJAS: 3
     rounds_fixed = 3
     
     for r in range(rounds_fixed):
@@ -166,51 +200,48 @@ if st.session_state.simulation_active:
         
         for agent_name in selected_archetypes:
             with st.chat_message("assistant", avatar="🎭"):
-                message_placeholder = st.empty()
-                
-                # CEREBRO DINÁMICO: Funciona con los PREDEFINIDOS y los NUEVOS
-                persona = st.session_state.c8_archetypes[agent_name]
-                
-                system_prompt = f"""
-                Estás interpretando a: {agent_name}
-                
-                TU PERFIL:
-                {persona}
-                
-                CONTEXTO:
-                - Escenario: {scenario}
-                - Ronda: {r + 1} de {rounds_fixed}
-                
-                INSTRUCCIONES DE ACTUACIÓN REALISTA:
-                1. INTERACTÚA: Menciona a los otros agentes por nombre. Discute con ellos.
-                2. TEATRO: Usa acotaciones entre paréntesis. Ej: (Se levanta), (Golpea la mesa).
-                3. PROFUNDIDAD: Haz preguntas difíciles a Sofía. No seas complaciente.
-                4. TONO: Usa el tono descrito en tu perfil. Si eres el Provocador, sé agresivo.
-                
-                HISTORIAL:
-                """
-                
-                messages = [{"role": "system", "content": system_prompt}]
-                for m in st.session_state.messages:
-                    role = "user" if m["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
+                # SOLUCIÓN TÉCNICA: Quitamos el placeholder complejo para evitar errores
+                with st.spinner(f"{agent_name} está pensando..."):
+                    
+                    persona = st.session_state.c8_archetypes[agent_name]
+                    
+                    system_prompt = f"""
+                    Estás interpretando a: {agent_name}
+                    PERFIL: {persona}
+                    CONTEXTO: Escenario {scenario}, Ronda {r + 1} de {rounds_fixed}.
+                    INSTRUCCIONES:
+                    1. Interactúa con los demás.
+                    2. Usa acotaciones teatrales (ej: *golpea la mesa*).
+                    3. Sé breve pero contundente.
+                    
+                    HISTORIAL:
+                    """
+                    
+                    messages = [{"role": "system", "content": system_prompt}]
+                    for m in st.session_state.messages:
+                        role = "user" if m["role"] == "user" else "assistant"
+                        messages.append({"role": role, "content": f"{m.get('name')}: {m['content']}"})
 
-                try:
-                    client = openai.OpenAI() 
-                    response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=messages,
-                        temperature=0.85, 
-                        max_tokens=550
-                    )
-                    reply = response.choices[0].message.content
-                    
-                    message_placeholder.markdown(f"**{agent_name}**\n\n{reply}")
-                    st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
-                    time.sleep(1) 
-                    
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    try:
+                        client = openai.OpenAI() 
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=messages,
+                            temperature=0.85, 
+                            max_tokens=550
+                        )
+                        reply = response.choices[0].message.content
+                        
+                        # Renderizado directo y seguro
+                        st.markdown(f"**{agent_name}**")
+                        st.markdown(reply)
+                        
+                        st.session_state.messages.append({"role": "assistant", "content": reply, "name": agent_name})
+                        
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+            
+            time.sleep(0.5) # Pequeña pausa entre turnos
     
     st.session_state.simulation_active = False
     st.success("✅ Debate finalizado.")
